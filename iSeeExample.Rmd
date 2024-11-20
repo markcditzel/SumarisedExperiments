@@ -1,0 +1,303 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+https://www.bioconductor.org/packages/release/bioc/vignettes/iSEE/inst/doc/basic.html
+
+An introduction to the iSEE interface
+
+Kevin Rue-Albrecht1*, Federico Marini2,3**, Charlotte Soneson4,5*** and Aaron Lun****
+
+1MRC WIMM Centre for Computational Biology, University of Oxford, Oxford, OX3 9DS, UK
+2Institute of Medical Biostatistics, Epidemiology and Informatics (IMBEI), Mainz
+3Center for Thrombosis and Hemostasis (CTH), Mainz
+4Friedrich Miescher Institute for Biomedical Research, Basel, Switzerland
+5SIB Swiss Institute of Bioinformatics
+
+*kevinrue67@gmail.com
+**marinif@uni-mainz.de
+***charlottesoneson@gmail.com
+****infinite.monkeys.with.keyboards@gmail.com
+
+29 October 2024
+
+Package
+
+iSEE 2.18.0
+
+Compiled date: 2024-10-29
+
+Last edited: 2020-04-20
+
+License: MIT + file LICENSE
+
+#1 Introduction
+
+iSEE is a Bioconductor package that provides an *interactive Shiny-based graphical user interface for exploring data stored in SummarizedExperiment objects* (Rue-Albrecht et al. 2018). 
+
+Instructions to install the package are available here. Once installed, the package can be loaded and attached to your current workspace as follows:
+
+
+```{r remedy001}
+
+library(iSEE)
+
+```
+
+If you have a SummarizedExperiment object11 Or an instance of a subclass, like a SingleCellExperiment object. named se, you can launch an iSEE app by running:
+
+iSEE(se)
+
+In this vignette, we demonstrate this process using the *allen single-cell RNA-seq data set from the scRNAseq package*. However, if you want to start playing with the app immediately, you can simply run:
+
+example(iSEE, ask=FALSE)
+
+#2 Setting up the data
+
+The allen data set contains expression values for *379 cells from the mouse visual cortex* (Tasic et al. 2016), and can be lo*aded directly by calling ReprocessedAllenData()* and specifying the value for the assays parameter. To begin with, we assign the output of this call to an sce object and inspect it.
+
+```{r remedy002}
+
+library(scRNAseq)
+sce <- ReprocessedAllenData(assays = "tophat_counts")   # specifying the assays to speed up the example
+sce
+
+```
+
+As provided, the sce object contains *raw data and a number of quality control and experimental cell annotations*, all available in colData(sce).
+
+```{r remedy003}
+
+colnames(colData(sce))
+
+```
+
+Then, we *normalize* the expression values with *scater.*
+
+```{r remedy004}
+
+library(scater)
+sce <- logNormCounts(sce, exprs_values="tophat_counts")
+
+```
+```{r}
+sce
+```
+
+
+Next, we apply *PCA and t-SNE to generate two low-dimensional representations of the cells*. 
+
+The dimensionality reduction results are stored in reducedDim(sce).
+
+
+```{r remedy005}
+
+set.seed(1000)
+sce <- scater::runPCA(sce)
+sce <- scater::runTSNE(sce)
+reducedDimNames(sce)
+
+```
+
+
+At this point, the *sce object does not contain any annotations for the rows* (i.e., features) in the data set. Thus, to prepare a fully-featured example application, we also *add some gene metadata to the rowData related to the mean-variance relationship in the data*.
+
+```{r remedy006}
+
+rowData(sce)$mean_log <- rowMeans(logcounts(sce))
+rowData(sce)$var_log <- apply(logcounts(sce), 1, var)
+
+```
+
+
+It is important to note that *iSEE relies primarily on precomputed values stored in the various slots of objects derived from the SummarizedExperiment class*22 Except when dealing with custom panels.. 
+
+This allows users to visualize any metrics of interest, but also *requires these to be calculated and added to the object before the initialization of the app*. 
+
+That said, it is straightforward to i*teratively explore a precomputed object, take notes of new metrics to compute, close the app, store new results in the SummarizedExperiment object, and launch a new app* using the updated object.
+
+
+#Launching the interface
+
+To begin the exploration, we *create an iSEE app with the SingleCellExperiment object generated above*. 
+
+In its simplest form, the iSEE function only requires the input object. However, iSEE applications can be extensively reconfigured using a number of optional arguments to the iSEE function.
+
+```{r remedy007}
+
+app <- iSEE(sce)
+
+```
+
+The runApp function launches the app in our browser.
+
+```{r remedy008}
+
+shiny::runApp(app)
+```
+
+![Plot title. ](iSeeExample_insertimage_1.png)
+
+By default, the app starts with a dashboard that contains one panel or table of each type. By opening the collapsible panels named “Data parameters”, “Visual parameters”, and “Selection parameters” under each plot, we can control the content and appearance of each panel.
+
+Now, look in the upper right corner for a question mark icon (), and click on the hand button () for an introductory tour. This will perform an interactive tour of the app, based on the rintrojs package (Ganz 2016). 
+
+During this tour, you will be taken through the different components of the iSEE user interface and learn the basic usage mechanisms by doing small actions guided by the tutorial: the highlighted elements will be responding to your actions, while the rest of the UI will be shaded. You can move forward and backward along the tour by clicking on the “Next”/“Back” buttons, or also using the arrow keys. You can even jump to a particular step by clicking on its circle. To exit the tour, either click on “Skip”, or simply click outside of the highlighted UI element.
+
+Once you are done generating plots, click on the export icon () in the upper right corner, and click on the magic wand button () to display R code that you can export and directly re-use in your R session. This will open a modal popup where the R code used to generate the plots is displayed in a shinyAce-based text editor. Select parts or all of it to copy-and-paste it into your analysis script/Rmarkdown file. However, note that the order in which the code blocks are reported is important if you have linked panels to one another, as the panels sending point selections must be executed before those that receive the corresponding selection.
+
+4 Description of the user interface
+
+4.1 Header
+
+The layout of the iSEE user interface uses the shinydashboard package. The dashboard header contains four dropdown menus.
+
+The first icon in the dashboard header is the “Organization” menu, which is identified by an icon displaying multiple windows (). This menu contains two items:
+
+The “Organize panels” button. Click on this button to open a modal window that contains:
+A selectize input to add, remove, and reorder panels in the main interface.
+Two inputs to control the width and height, respectively, of each panel selected above. Note that panel width is defined in integer grid units between 1 and 12 (see ?shiny::column). In contrast, panel height is defined in pixels (see ?shiny::plotOutput).
+The “Examine panel chart” functionality, identified by a chain icon (). Click on this button to obtain a graph representation of the existing links and point selections among your visible plot and table panels. Every panel is represented by a node coded with the same color as in the app. This can be very useful in sessions that include a large number of panels, to visualize the relationship structure between the various panels that send and receive selections of data points.
+The second icon in the dashboard header is the “Export” dropdown menu, which is identified by a download icon () and contains:
+
+The “Download panel output” functionality, identified by the download icon (). Here, you can download a zip folder with the currently displayed panel content (high-resolution figures and table contents as csv files).
+The “Extract the R code”, functionality (). At any point during your live session, you might want to record the code that reproduces exactly the state of each plot. Clicking on this button opens a modal popup window, with a shinyAce-based text editor, where the code is formatted and displayed with syntax highlighting. You can copy the code to the clipboard by selecting the text (please do include the initial lines and the sessionInfo() commands for best tracking of your environment), and store it in your analysis report/script. This code can then be further edited to finalize the plots (e.g., for publication).
+The “Display panel settings” () button, which lets you export the code defining the state of the current panels in the interface. This is useful if you want to preconfigure an iSEE instance to start in the current state, rather than with the default set of panels.
+The “Documentation” dropdown menu is accessible through the question mark icon (), which contains:
+
+The button to start an interactive tour () of iSEE, which allows users to learn the basic usage mechanisms by doing. During a tour, the highlighted elements respond to the user’s actions, while the rest of the UI is shaded.
+The button to “Open the vignette” (), which displays the iSEE vignette, either available on your system or accessed at the webpage of the package on the Bioconductor project site. In the latter case, the vignette will refer to the current release or development version, according to the version of the package installed on your system).
+The “Additional Information” dropdown menu is accessible through the information icon (), and contains:
+
+The “About this session” button (), which reports the output of the sessionInfo() function in a modal popup window. This is particularly useful for reproducing or reporting the environment, especially when reporting errors or unexpected behaviors.
+The “About iSEE” button () shows the information on the development team, licensing and citation information for the iSEE package. You can follow the development of the package by checking the GitHub repository (https://github.com/iSEE/iSEE), where new functionality will be added. Well-considered suggestions in the form of issues or pull requests are welcome.
+4.2 Body
+
+4.2.1 Overview of panel types
+
+The main element in the body of iSEE is the combination of panels, generated (and optionally linked to one another) according to your actions. There are currently eight standard panel types that can be generated with iSEE:
+
+Reduced dimension plot
+Column data table
+Column data plot
+Feature assay plot
+Row data table
+Row data plot
+Sample assay plot
+Complex heatmap
+In addition, custom panel types can be defined as described in a separate dedicated vignette. The panels and models in the iSEEu package provide additional flexibility.
+
+For each standard plot panel, three different sets of parameters will be available in collapsible boxes:
+
+“Data parameters”, to control parameters specific to each type of plot.
+“Visual parameters”, to specify parameters that will determine the aspect of the plot, in terms of coloring, point features, and more (e.g., legend placement, font size).
+“Selection parameters” to control the incoming point selection and link relationships to other plots.
+4.2.2 Reduced dimension plots
+
+If a SingleCellExperiment object is supplied to the iSEE function, reduced dimension results are extracted from the reducedDim slot. Examples include low-dimensional embeddings from principal components analysis (PCA) or t-distributed stochastic neighbour embedding (t-SNE) (Van der Maaten and Hinton 2008). These results are used to construct a two-dimensional Reduced dimension plot where each point is a sample, to facilitate efficient exploration of high-dimensional datasets. The “Data parameters” control the reducedDim slot to be displayed, as well as the two dimensions to plot against each other.
+
+Note that this builtin panel does not compute reduced dimension embeddings; they must be precomputed and available in the object provided to the iSEE function. Nevertheless, custom panels - such as the iSEEu DynamicReducedDimensionPlot can be developed and used to enable such features.
+
+4.2.3 Column data plots
+
+A Column data plot visualizes sample metadata stored in the SummarizedExperiment column metadata. Different fields can be used for the x- and y-axes by selecting appropriate values in the “Data parameters” box. This plot can assume various forms, depending on the nature of the data on the x- and y-axes:
+
+If the y-axis is continuous and the x-axis is categorical, violin plots are generated (grouped by the x-axis factor).
+If the y-axis is categorical and the x-axis is continuous, horizontal violin plots are generated (grouped by the y-axis factor).
+If both axes are continuous, a scatter plot is generated. This enables the use of contours that are overlaid on top of the plot, check the "Other" box to see the available options.
+If both axes are categorical, a plot of squares (Hinton plot) is generated where the area of each square is proportional to the number of samples within each combination of factor levels.
+Note that an x-axis setting of “None” is considered to be categorical with a single level.
+
+4.2.4 Feature assay plots
+
+A Feature assay plot visualizes the assayed values (e.g., gene expression) for a particular feature (e.g., gene) across the samples on the y-axis. This usually results in a (grouped) violin plot, if the x-axis is set to "None" or a categorical variable; or a scatter plot, if the x-axis is another continuous variable33 That said, if there are categorical values for the assayed values, these will be handled as described in the column data plots..
+
+Gene selection for the y-axis can be achieved by using a linked row data table in another panel. Clicking on a row in the table automatically changes the assayed values plotted on the y-axis. Alternatively, the row name can be directly entered as text that corresponds to an entry of rownames(se)44 This is not effective if se does not contain row names..
+
+The x-axis covariate can also be selected from the plotting parameters. This can be "None", sample metadata, or the assayed values of another feature (also identified using a linked table or via text). The measurement units are selected as one of the assays(se), which is applied to both the X and Y axes.
+
+Obviously, any other assayed value for any feature can be visualized in this manner, not limited to the expression of genes. The only requirement for this type of panel is that the observations can be stored as a matrix in the SummarizedExperiment object.
+
+4.2.5 Row data plots
+
+A Row data plot allows the visualization of information stored in the rowData slot of a SummarizedExperiment object. Its behavior mirrors the implementation for the Column data plot, and correspondingly this plot can assume various forms depending on whether the data are categorical or continuous.
+
+4.2.6 Sample assay plots
+
+A Sample assay plot visualizes the assayed values (e.g., gene expression) for a particular sample (e.g., cell) across the features on the y-axis.
+
+This usually results in a (grouped) violin plot, if the x-axis is set to "None" or a categorical variable (e.g., gene biotype); or a scatter plot, if the x-axis is another continuous variable.
+
+Notably, the x-axis covariate can also be set to:
+
+A discrete row data covariates (e.g., gene biotype), to stratify the distribution of assayed values
+A continuous row data covariate (e.g., count of cells expressing each gene)
+Another sample, to visualize and compare the assayed values in any two samples.
+4.2.7 Row data tables
+
+A Row data table contains the values of the rowData slot for the SingleCellExperiment/SummarizedExperiment object. If none are available, a column named Present is added and set to TRUE for all features, to avoid issues with DT::datatable and an empty DataFrame. Typically, these tables are used to link to other plots to determine the features to use for plotting or coloring. However, they can also be used to retrieve gene-specific annotation on the fly by specifying the annotFun parameter, e.g. using the annotateEntrez or annotateEnsembl functions, provided in iSEE. Alternatively, users can create a customized annotation function; for more details on this, please consult the manual pages ?annotateEntrez and ?annotateEnsembl.
+
+4.2.8 Column data tables
+
+A Column data table contains the values of the colData slot for the SingleCellExperiment/SummarizedExperiment object. Its behavior mirrors the implementation for the Row data table. Correspondingly, if none are available, a column named Present is added and set to TRUE for all samples, to avoid issues with DT::datatable and an empty DataFrame. Typically, these tables are used to link to other plots to determine the samples to use for plotting or coloring.
+
+4.2.9 Heat maps
+
+Heat map panels provide a compact overview of the data for multiple features in the form of color-coded matrices. These correspond to the assays stored in the SummarizedExperiment object, where features (e.g., genes) are the rows and samples are the columns.
+
+User can select features (rows) to display from the selectize widget (which supports autocompletion), or also via other panels, like row data plots or row data tables. In addition, users can rapidly import custom lists of feature names using a modal popup that provides an Ace editor where they can directly type of paste feature names, and a file upload button that accepts text files containing one feature name per line. Users should remember to click the “Apply” button before closing the modal, to update the heat map with the new list of features.
+
+The “Suggest feature order” button clusters the rows, and also rearranges the elements in the selectize according to the clustering. It is also possible to choose which assay type is displayed ("logcounts" being the default choice, if available). Samples in the heat map can also be annotated, simply by selecting relevant column metadata. A zooming functionality is also available, restricted to the y-axis (i.e., allowing closer inspection on the individual features included).
+
+5 Description of iSEE functionality
+
+5.1 Coloring plots by sample attributes
+
+Column-based plots are the reduced dimension, feature assay and column data plots, where each data point represents a sample. Here, data points can be colored in different ways:
+
+The default is no color scheme ("None" in the radio button). This results in data points of a constant user-specified color.
+Any column of colData(se) can be used. The plot automatically adjusts the scale to use based on whether the chosen column is continuous or categorical.
+The assay values of a particular feature in each sample can be used. The feature can be chosen either via a linked row table or selectize input (as described for the Feature assay plot panel). Users can also specify the assays from which values are extracted.
+The identity of a particular sample can be used, which will be highlighted on the plot in a user-specified color. The sample can be chosen either via a linked column table or via a selectize input.
+For row-based plots (i.e., the sample assay and row data plots), each data point represents a feature. Like the column-based plots, data points can be colored by:
+
+"None", yielding data points of fixed color.
+Any column of rowData(se).
+The identity of a particular feature, which is highlighted in the user-specified color.
+Assay values for a particular sample.
+Fine control of the color maps is possible through the ExperimentColorMap class, see this vignette for more details.
+
+5.2 Controlling point aesthetics
+
+Data points can be set to different shapes according to categorical factors in colData(se) (for column-based plots) or rowData(se) (for row-based plots). This is achieved by checking the "Shape" box to reveal the shape-setting options. The size and opacity of the data points can be modified via the options available by checking the "Point" box. This may be useful for aesthetically pleasing visualizations when the number of points is very large or small.
+
+5.3 Faceting
+
+Each point-based plot can be split into multiple facets using the options in the "Facet" checkbox. Users can facet by row and/or column, using categorical factors in colData(se) (for column-based plots) or rowData(se) (for row-based plots). This provides a convenient way to stratify points in a single plot by multiple factors of interest. Note that point selection can only occur within a single facet at a time; points cannot be selected across facets.
+
+5.4 Zooming in and out
+
+Zooming in is possible by first selecting a region of interest in a plot using the brush (drag and select); double-clicking on the brushed area then zooms into the selected area. To zoom out to the original plot, simply double-click at any location in the plot.
+
+6 FAQ
+
+Q: Can you implement a ‘Copy to clipboard’ button in the code editor?
+
+A: This is not necessary, as one can click anywhere in the code editor and instantly select all the code using a keyboard shortcut that depends on your operating system.
+
+Q: When brushing with a transparency effect, it seems that data points in the receiving plot are not made transparent/subsetted correctly.
+
+A: What you see is an artefact of overplotting: in areas excessively dense in points, transparency ceases to be an effective visual effect.
+
+Q: Brushing on violin or square plots doesn’t seem to select anything.
+
+A: For violin plots, points will be selected only if the brushed area includes the center of the x-tick, i.e., the center of the violin plot. This is intentional as it allows easy selection of all points in complex grouped violin plots. Indeed, the location of a specific point on the x-axis has no meaning. The same logic applies to the square plots, where only the center of each square needs to be selected to obtain all the points in the square.
+
+Q: I’d like to try iSEE but I can’t install it/I just want a quick peek. Is there something you can do?
+
+A: We set up an instance of iSEE running on the allen dataset at this address: http://shiny.imbei.uni-mainz.de:3838/iSEE. A range of interactive tours showcasing a variety of data types is also available here: https://github.com/iSEE/iSEE2018. Please keep in mind this is only for demonstration purposes, yet those instances show how you or your system administrator can setup iSEE for analyzing and/or sharing your SummarizedExperiment/SingleCellExperiment precomputed object.
+
+Q: I would like to use iSEE with my Seurat object, how do I do?
+
+A: The Seurat package provides as.SingleCellExperiment() to coerce Seurat objects to SingleCellExperiment objects. This conversion includes assays, cell metadata, feature metadata, and dimensionality reduction results. You can then use the SingleCellExperiment object as usual.
