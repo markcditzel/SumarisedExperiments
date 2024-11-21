@@ -1,6 +1,8 @@
 ---
 title: "R Notebook"
-output: html_notebook
+output:
+  html_notebook:
+    keep_md: true
 ---
 
 https://www.bioconductor.org/packages/release/bioc/vignettes/iSEE/inst/doc/basic.html
